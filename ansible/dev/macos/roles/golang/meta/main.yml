@@ -1,0 +1,28 @@
+galaxy_info:
+  author: Alexandre Vézina
+  description: Installs Go on macOS
+
+  license: (C) Copyright 2017, UBIK inc 
+
+  min_ansible_version: 1.9
+
+  platforms:
+    - name: MacOSX
+      versions:
+        - '10.12'
+        - '10.11'
+        - '10.10'
+
+  galaxy_tags:
+    - command
+    - development
+    - elcapitan
+    - headless
+    - line
+    - mac
+    - osx
+    - sierra
+    - tools
+    - yosemite
+
+dependencies: []

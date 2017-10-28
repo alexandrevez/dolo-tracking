@@ -1,0 +1,4 @@
+- name: Cleanup go
+  file:
+    path: /tmp/{{ go_pkg }}
+    state: absent

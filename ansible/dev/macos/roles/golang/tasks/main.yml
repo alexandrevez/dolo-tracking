@@ -1,0 +1,94 @@
+- name: Am I running on Mac OS X?
+  fail:
+    msg: Target host is not running Mac OS X
+  when: ansible_distribution != 'MacOSX'
+
+- name: Check that Go bin path is present
+  stat:
+    path: '{{ go_install_path }}'
+  register: go
+
+- name: Register the current Go version (if any)
+  command: "{{ go_install_path }}/bin/go version"
+  ignore_errors: yes
+  register: go_version
+  changed_when: false
+
+- name: Remove old installation of Go
+  file:
+    path: '{{ go_install_path }}'
+    state: absent
+  when: go_version|failed or go_version.stdout != go_version_target
+  become: true
+  become_method: sudo
+  become_user: root
+
+- name: Download the Go package
+  get_url:
+    url: "{{ go_download_location }}"
+    dest: /tmp/{{ go_pkg }}
+    checksum: "{{ go_pkg_checksum }}"
+  when: go_version|failed or go_version.stdout != go_version_target
+  become: true
+  become_method: sudo
+  become_user: root
+
+- name: Install the Go package
+  shell: installer -pkg /tmp/{{ go_pkg }} -target /
+  when: go_version|failed or go_version.stdout != go_version_target
+  become: true
+  become_method: sudo
+  become_user: root
+  notify:
+    - Cleanup go
+
+- name: "Test GOPATH {{ go_path }} folder exists"
+  file: 
+    path: "{{ go_path }}"
+    state: directory
+    mode: 0755
+
+# GOPATH
+- name: Check if another GOPATH is set
+  shell: grep "export GOPATH=" $HOME/.profile
+  register: go_path_already_set
+  changed_when: false
+  failed_when: false
+
+- name: Test GOPATH {{ go_path }} is set for current user
+  shell: grep "export GOPATH=" $HOME/.profile | grep {{ go_path  | regex_replace('\$', '\\$') }}
+  register: go_path_exists
+  changed_when: go_path_exists.rc != 0
+  failed_when: false
+
+- name: Add GOPATH {{ go_path }} for the current user (first GOPATH in file)
+  lineinfile:
+    dest: $HOME/.profile
+    state: present
+    line: 'export GOPATH={{ go_path }}'
+  when: go_path_exists.rc != 0 and go_path_exists.rc != 0
+
+- name: Add GOPATH {{ go_path }} for the current user (another GOPATH exists in file)
+  lineinfile:
+    dest: $HOME/.profile
+    state: present
+    line: 'export GOPATH={{ go_path }}:$GOPATH'
+  when: go_path_exists.rc != 0 and go_path_exists.rc == 0
+
+# GB
+- name: Check that the gb path is present
+  stat:
+    path: '{{ go_path }}/bin/gb'
+  register: gb
+
+- name: Cleanup go packages
+  file:
+    state: absent
+    path: "{{ go_path }}pkg"
+  when: not gb.stat.exists
+  become_method: sudo
+  become_user: root
+
+- name: Install gb
+  shell: go get github.com/constabulary/gb/...
+  when: not gb.stat.exists

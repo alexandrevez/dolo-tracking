@@ -1,0 +1,8 @@
+---
+- name: Setup dev environment on macOS
+  hosts: localhost
+
+  roles:
+    - osx-command-line-tools
+    - golang
+

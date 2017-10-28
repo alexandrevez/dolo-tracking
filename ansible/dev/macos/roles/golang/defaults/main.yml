@@ -1,0 +1,8 @@
+---
+go_pkg: "go1.9.darwin-amd64.pkg"
+go_pkg_checksum: "sha256:2197814c83fc04569f5fabf030f835c95e48562afc48cbc96264665dc552f7a1"
+go_version_target: "go version go1.9 darwin/amd64"
+go_download_location: "https://storage.googleapis.com/golang/{{ go_pkg }}"
+set_go_path: true
+go_install_path: /usr/local/go/
+go_path: $HOME/dev/go/

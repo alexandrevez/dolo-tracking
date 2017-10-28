@@ -1,0 +1,12 @@
+bin/*
+/conf/*.json
+/language/*untranslated.json
+/pkg/
+/vendor/pkg/
+.DS_Store
+.vscode/launch.json
+.build
+/dist/
+/test/
+
+/ansible/**.retry
