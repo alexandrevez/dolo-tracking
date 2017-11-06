@@ -3,7 +3,6 @@ package main
 import (
 	"dolo-tracking/context"
 	"dolo-tracking/email"
-	"dolo-tracking/format"
 	"dolo-tracking/hubspot"
 	"dolo-tracking/logger"
 	"flag"
@@ -24,12 +23,16 @@ Merci beaucoup et n'hésitez pas à m'appeler si vous voulez en discuter de vive
 Alexandre Vézina<br />
 (581) 982-5190`
 
-const subject = "Doloréanne: Comme une actrice"
+const emailSubject = "Doloréanne: Comme une actrice"
 
 const fromEmail = "alex@doloreanne.com"
-const fromName = "Alexandre Vézina"
+const fromFirstname = "Alexandre"
+const fromLastname = "Vézina"
 
 const hubspotPipeline = "3682c689-4605-4437-abde-e0604828bf06"
+
+// https://app.hubspot.com/property-settings/2213414/deal/dealstage
+const hubspotDealstage = "aecf09f6-1e9a-4a4f-b9fa-384218cf6214"
 
 func newConfiguration(hubspotKey string, sparkpostKey string) (*context.Configuration, error) {
 	return &context.Configuration{
@@ -66,8 +69,8 @@ func sendEmail(ctx *context.App, to string) error {
 	return sp.SendHTML(email.HTMLEmailOpts{
 		HTML:     emailBody,
 		To:       to,
-		FromName: fromName,
-		Subject:  subject,
+		FromName: fromFirstname + " " + fromLastname,
+		Subject:  emailSubject,
 	})
 }
 
@@ -79,6 +82,7 @@ func main() {
 		contactIDList []int
 		contactList   []hubspot.Contact
 		contact       *hubspot.Contact
+		deal          *hubspot.Deal
 	)
 
 	hubspotKey := flag.String("hubspot", "", "Hubspot API key")
@@ -102,7 +106,10 @@ func main() {
 		os.Exit(1)
 	}
 
+	i := 0
+	sent := 0
 	for _, company := range companyList {
+		i++
 		logger.Debug(fmt.Sprintf("Processing company '%s'", company.Name))
 
 		// Find the contacts
@@ -118,7 +125,6 @@ func main() {
 				logger.Error(err.Error())
 				os.Exit(1)
 			}
-			fmt.Println(format.NewJSONString(*contact))
 			contactList = append(contactList, *contact)
 
 			time.Sleep(time.Millisecond * 133)
@@ -127,23 +133,52 @@ func main() {
 			continue
 		}
 
-		// // Find the deal or create it if missing
-		// if deal, err = hubspot.FindDeal(ctx.Config.Hubspot.APIKey, company.CompanyID, hubspotPipeline); err != nil {
-		// 	logger.Error(err.Error())
-		// 	os.Exit(1)
-		// }
-		// if deal == nil {
-		// 	if err = sendEmail(ctx, []string{"avezina@ubikvoip.com"}); err != nil {
-		// 		logger.Error(err.Error())
-		// 		os.Exit(1)
-		// 	}
-		// 	if err = hubspot.AddDeal(ctx.Config.Hubspot.APIKey, company, hubspotPipeline); err != nil {
-		// 		logger.Error(err.Error())
-		// 		os.Exit(1)
-		// 	}
-		// }
+		// Find the deal or create it if missing
+		if deal, err = hubspot.FindDeal(ctx.Config.Hubspot.APIKey, company.CompanyID, hubspotPipeline); err != nil {
+			logger.Error(err.Error())
+			os.Exit(1)
+		}
+		if deal == nil {
+			sent++
+			// Send the email
+			if err = sendEmail(ctx, contactList[0].Email); err != nil {
+				logger.Error(err.Error())
+				os.Exit(1)
+			}
+
+			// Add the deal
+			if deal, err = hubspot.AddDeal(ctx.Config.Hubspot.APIKey, company, contactList[0], hubspotPipeline, hubspotDealstage); err != nil {
+				logger.Error(err.Error())
+				os.Exit(1)
+			}
+			if deal == nil {
+				logger.Error("No deal returned")
+				os.Exit(1)
+			}
+
+			// Log the email
+			emailMeta := hubspot.MetadataEmail{
+				From: hubspot.MetadataEmailFrom{
+					Email:     fromEmail,
+					Firstname: fromFirstname,
+					Lastname:  fromLastname,
+				},
+				To: []hubspot.MetadataEmailTo{
+					hubspot.MetadataEmailTo{
+						Email: contact.Email,
+					},
+				},
+				Subject: emailSubject,
+				HTML:    emailBody,
+			}
+			if err = hubspot.AddEngagementEmail(ctx.Config.Hubspot.APIKey, company, contactList[0], *deal, emailMeta); err != nil {
+				logger.Error(err.Error())
+				os.Exit(1)
+			}
+
+		}
 
 		time.Sleep(time.Millisecond * 1000)
 	}
-
+	fmt.Printf("\nSent %d emails out of %d companies\n", sent, i)
 }
