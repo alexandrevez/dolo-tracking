@@ -15,7 +15,7 @@ import (
 
 const emailBody = `Bonjour,<br /><br />
 
-Je me demandais si vous aviez eu quelques minutes pour écouter le nouveau single de Doloréanne : Comme une actrice. L'extrait été lancé sur 45tours.ca le 19 septembre dernier. Je vous laisse l'extrait sur le Bandcamp du groupe https://doloreanne.bandcamp.com/track/comme-une-actrice.  Sachez que votre critique par rapport à votre programmation nous ferait le plus grand des plaisirs.<br /><br />
+Je me demandais si vous aviez eu quelques minutes pour écouter le nouveau single de Doloréanne : Bombe. L'extrait été lancé sur 45tours.ca le 30 mars dernier. Je vous laisse ausi l'extrait sur le Bandcamp du groupe https://doloreanne.bandcamp.com/track/bombe.<br/><br />Sachez que votre critique par rapport à votre programmation nous ferait le plus grand des plaisirs.<br /><br />
 
 Merci beaucoup et n'hésitez pas à m'appeler si vous voulez en discuter de vive voix. <br /><br />
 
@@ -23,16 +23,16 @@ Merci beaucoup et n'hésitez pas à m'appeler si vous voulez en discuter de vive
 Alexandre Vézina<br />
 (581) 982-5190`
 
-const emailSubject = "Doloréanne: Comme une actrice"
+const emailSubject = "Doloréanne: Bombe"
 
 const fromEmail = "alex@doloreanne.com"
 const fromFirstname = "Alexandre"
 const fromLastname = "Vézina"
 
-const hubspotPipeline = "3682c689-4605-4437-abde-e0604828bf06"
+const hubspotPipeline = "b291d32e-7f79-4584-bbeb-154ec8ccf840"
 
 // https://app.hubspot.com/property-settings/2213414/deal/dealstage
-const hubspotDealstage = "aecf09f6-1e9a-4a4f-b9fa-384218cf6214"
+const hubspotDealstage = "28fa70ce-86df-40de-8f01-aee406f9a77f"
 
 func newConfiguration(hubspotKey string, sparkpostKey string) (*context.Configuration, error) {
 	return &context.Configuration{
@@ -138,9 +138,17 @@ func main() {
 			logger.Error(err.Error())
 			os.Exit(1)
 		}
+
 		if deal == nil {
 			sent++
+			if contactList[0].Email == "" {
+				logger.Warn(fmt.Sprintf("No email found for deal: %s", company.Name))
+				continue
+			}
+
 			// Send the email
+			logger.Debug(fmt.Sprintf("Sending email to %s", contactList[0].Email))
+
 			if err = sendEmail(ctx, contactList[0].Email); err != nil {
 				logger.Error(err.Error())
 				os.Exit(1)
@@ -175,10 +183,10 @@ func main() {
 				logger.Error(err.Error())
 				os.Exit(1)
 			}
-
+			time.Sleep(time.Millisecond * 2000)
+		} else {
+			logger.Debug("Already processed... doing nothing with it")
 		}
-
-		time.Sleep(time.Millisecond * 1000)
 	}
-	fmt.Printf("\nSent %d emails out of %d companies\n", sent, i)
+	logger.Debug(fmt.Sprintf("Sent %d emails out of %d companies\n", sent, i))
 }
