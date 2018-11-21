@@ -11,11 +11,17 @@ import (
 	"time"
 )
 
-// FIXME all
-
 const emailBody = `Bonjour,<br /><br />
 
-Je me demandais si vous aviez eu quelques minutes pour écouter le nouveau single de Doloréanne : Bombe. L'extrait été lancé sur 45tours.ca le 30 mars dernier. Je vous laisse ausi l'extrait sur le Bandcamp du groupe https://doloreanne.bandcamp.com/track/bombe.<br/><br />Sachez que votre critique par rapport à votre programmation nous ferait le plus grand des plaisirs.<br /><br />
+Je me demandais si vous aviez vu passer le nouveau single de Doloréanne : Jusqu'au bout. 
+L'extrait a été lancé sur postedecoute.ca le 21 octobre dernier et est en recommandation 
+radios amplifiées sur <a href="https://palmaresadisq.ca/fr/sur-les-ondes/radio-amplifiees/" target="_BLANK">Palmares ADISQ</a> 
+en ce moment. 
+<br /><br />
+Je vous laisse ausi l'extrait sur le Bandcamp pour une écoute rapide <a href="https://doloreanne.bandcamp.com/track/jusquau-bout" target="_BLANK">https://doloreanne.bandcamp.com/track/jusquau-bout</a>. 
+<br/><br />
+Sachez que votre critique par rapport à votre programmation nous fait, comme toujours, 
+le plus grand des plaisirs.<br /><br />
 
 Merci beaucoup et n'hésitez pas à m'appeler si vous voulez en discuter de vive voix. <br /><br />
 
@@ -23,16 +29,11 @@ Merci beaucoup et n'hésitez pas à m'appeler si vous voulez en discuter de vive
 Alexandre Vézina<br />
 (581) 982-5190`
 
-const emailSubject = "Doloréanne: Bombe"
+const emailSubject = "Doloréanne : Jusqu'au bout"
 
 const fromEmail = "alex@doloreanne.com"
 const fromFirstname = "Alexandre"
 const fromLastname = "Vézina"
-
-const hubspotPipeline = "b291d32e-7f79-4584-bbeb-154ec8ccf840"
-
-// https://app.hubspot.com/property-settings/2213414/deal/dealstage
-const hubspotDealstage = "28fa70ce-86df-40de-8f01-aee406f9a77f"
 
 func newConfiguration(hubspotKey string, sparkpostKey string) (*context.Configuration, error) {
 	return &context.Configuration{
@@ -82,7 +83,6 @@ func main() {
 		contactIDList []int
 		contactList   []hubspot.Contact
 		contact       *hubspot.Contact
-		deal          *hubspot.Deal
 	)
 
 	hubspotKey := flag.String("hubspot", "", "Hubspot API key")
@@ -94,13 +94,11 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Build the app context
 	if ctx, err = buildContext(*hubspotKey, *sparkpostAPIKey); err != nil {
 		logger.Error(err.Error())
 		os.Exit(1)
 	}
 
-	// Find the companies
 	if companyList, err = hubspot.FindCompanies(ctx.Config.Hubspot.APIKey); err != nil {
 		logger.Error(err.Error())
 		os.Exit(1)
@@ -112,13 +110,11 @@ func main() {
 		i++
 		logger.Debug(fmt.Sprintf("Processing company '%s'", company.Name))
 
-		// Find the contacts
 		if contactIDList, err = hubspot.GetCompanyContactList(ctx.Config.Hubspot.APIKey, company.CompanyID); err != nil {
 			logger.Error(err.Error())
 			os.Exit(1)
 		}
 
-		// Find the contacts
 		contactList = []hubspot.Contact{}
 		for _, contactID := range contactIDList {
 			if contact, err = hubspot.GetContact(ctx.Config.Hubspot.APIKey, contactID); err != nil {
@@ -129,64 +125,23 @@ func main() {
 
 			time.Sleep(time.Millisecond * 133)
 		}
+
 		if len(contactList) == 0 {
 			continue
 		}
+		if contactList[0].Email == "" {
+			logger.Warn(fmt.Sprintf("No email found for deal: %s", company.Name))
+			continue
+		}
 
-		// Find the deal or create it if missing
-		if deal, err = hubspot.FindDeal(ctx.Config.Hubspot.APIKey, company.CompanyID, hubspotPipeline); err != nil {
+		logger.Debug(fmt.Sprintf("Sending email to %s", contactList[0].Email))
+		if err = sendEmail(ctx, contactList[0].Email); err != nil {
 			logger.Error(err.Error())
 			os.Exit(1)
 		}
+		sent++
 
-		if deal == nil {
-			sent++
-			if contactList[0].Email == "" {
-				logger.Warn(fmt.Sprintf("No email found for deal: %s", company.Name))
-				continue
-			}
-
-			// Send the email
-			logger.Debug(fmt.Sprintf("Sending email to %s", contactList[0].Email))
-
-			if err = sendEmail(ctx, contactList[0].Email); err != nil {
-				logger.Error(err.Error())
-				os.Exit(1)
-			}
-
-			// Add the deal
-			if deal, err = hubspot.AddDeal(ctx.Config.Hubspot.APIKey, company, contactList[0], hubspotPipeline, hubspotDealstage); err != nil {
-				logger.Error(err.Error())
-				os.Exit(1)
-			}
-			if deal == nil {
-				logger.Error("No deal returned")
-				os.Exit(1)
-			}
-
-			// Log the email
-			emailMeta := hubspot.MetadataEmail{
-				From: hubspot.MetadataEmailFrom{
-					Email:     fromEmail,
-					Firstname: fromFirstname,
-					Lastname:  fromLastname,
-				},
-				To: []hubspot.MetadataEmailTo{
-					hubspot.MetadataEmailTo{
-						Email: contact.Email,
-					},
-				},
-				Subject: emailSubject,
-				HTML:    emailBody,
-			}
-			if err = hubspot.AddEngagementEmail(ctx.Config.Hubspot.APIKey, company, contactList[0], *deal, emailMeta); err != nil {
-				logger.Error(err.Error())
-				os.Exit(1)
-			}
-			time.Sleep(time.Millisecond * 2000)
-		} else {
-			logger.Debug("Already processed... doing nothing with it")
-		}
+		time.Sleep(time.Millisecond * 2000)
 	}
-	logger.Debug(fmt.Sprintf("Sent %d emails out of %d companies\n", sent, i))
+	logger.Debug(fmt.Sprintf("Sent %d emails in %d companies\n", sent, i))
 }
